@@ -1,4 +1,5 @@
 #include <immintrin.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -6,6 +7,16 @@
 #include <errno.h>
 #include "timer.h"
 #include "matrix_lib.h"
+
+#define VECTOR_SIZE 8
+
+struct thread_data{
+  int thread_id;
+  long unsigned int buffer_begin;
+  long unsigned int buffer_end;
+  long unsigned int buffer_size;
+  long unsigned int stride;
+};
 
 float scalar_value = 0.0f;
 
@@ -159,6 +170,7 @@ int check_errors(struct matrix *matrix, float scalar_value) {
 
 int main_func(int argc, char *argv[]) {
   unsigned long int DimA_M, DimA_N, DimB_M, DimB_N;
+  int NUM_THREADS;
   char *matrixA_filename, *matrixB_filename, *result1_filename, *result2_filename;
   char *eptr = NULL;
 
@@ -178,12 +190,13 @@ int main_func(int argc, char *argv[]) {
   DimA_N = strtol(argv[3], &eptr, 10);
   DimB_M = strtol(argv[4], &eptr, 10);
   DimB_N = strtol(argv[5], &eptr, 10);
-  matrixA_filename = argv[6];
-  matrixB_filename = argv[7];
-  result1_filename = argv[8];
-  result2_filename = argv[9];
+  NUM_THREADS = strtol(argv[6], &eptr, 10);
+  matrixA_filename = argv[7];
+  matrixB_filename = argv[8];
+  result1_filename = argv[9];
+  result2_filename = argv[10];
 
-  if ((scalar_value == 0.0f) || (DimA_M == 0) || (DimA_N == 0) || (DimB_M == 0) || (DimB_N == 0)) {
+  if ((scalar_value == 0.0f) || (DimA_M == 0) || (DimA_N == 0) || (DimB_M == 0) || (DimB_N == 0) || NUM_THREADS == 0) {
         printf("%s: erro na conversao do argumento: errno = %d\n", argv[0], errno);
 
         /* If a conversion error occurred, display a message and exit */
@@ -208,6 +221,45 @@ int main_func(int argc, char *argv[]) {
   if ((a == NULL) || (b == NULL) || (c == NULL)) {
 	printf("%s: array allocation problem.", argv[0]);
 	return 1;
+  }
+
+  /* Define auxiliary variables to work with threads */
+
+  struct thread_data thread_data_array[NUM_THREADS];
+  pthread_t thread[NUM_THREADS];
+  pthread_att_t attr;
+  int rc;
+  long t;
+  void *status;
+  //Chunk do buffer para primeira função é apenas referente ao vetor A
+  long unsigned int buffer_chunk = (DimA_M * DimA_N) / NUM_THREADS;
+
+  /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to initialize arrays */
+  for (t = 0; t < NUM_THREADS; t++){
+    thread_data_array[t].thread_id = t;
+    thread_data_array[t].buffer_begin = t * buffer_chunk;
+    thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+    thread_data_array[t].buffer_size = N;
+    thread_data_array[t].stride = VECTOR_SIZE;
+
+    //EU ACHO QUE AQUI TEM QUE CHAMAR A INITIALIZE_MATRIX, MAS NAO TEMOS O VALOR QUE TEM QUE COLOCAR NA MATRIZ A PORQUE NAO TEM O PARSE DO ARQUIVO AQUI
+    /*if (rc = pthread_create(&thread[t], &attr, initialize_matrix(&matrixA, ), (void *) &thread_data_array[t])) {
+      printf("ERROR; return code from pthread_create() is %d\n", rc);
+      exit(-1);
+    }*/
+  }
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM_THREADS; t++) {
+    if (rc = pthread_join(thread[t], &status)) {
+      printf("ERROR; return code from pthread_join() is %d\n", rc);
+      exit(-1);
+    }
   }
 
   /* Initialize the three matrixes */

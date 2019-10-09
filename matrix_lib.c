@@ -1,4 +1,5 @@
 #include <immintrin.h>
+#include <pthread.h>
 
 #define VECTOR_SIZE 8
 
