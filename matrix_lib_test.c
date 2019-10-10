@@ -16,10 +16,12 @@ struct thread_data{
   long unsigned int buffer_end;
   long unsigned int buffer_size;
   long unsigned int stride;
+  int mat_size;
+  float mat_value;
 };
 
-float scalar_value = 0.0f;
-float global_ma_value;
+//float scalar_value = 0.0f;
+//float global_ma_value;
 
 struct matrix matrixA, matrixB, matrixC;
 
@@ -87,38 +89,6 @@ int load_matrix(struct matrix *matrix, char *filename) {
   }
 
   if (fd != NULL) fclose(fd);
-
-  return 1;
-}
-
-int initialize_matrix(struct matrix *matrix, float value, float inc) {
-  unsigned long int i;
-  unsigned long int N;
-  unsigned long int nxt_inc;
-
-  /* Check the numbers of the elements of the matrix */
-  N = matrix->height * matrix->width;
-
-  /* Check the integrity of the matrix */
-  if (N == 0 || matrix->rows == NULL) return 0;
-
-  float *nxt_a = matrix->rows; 
-  for ( i = 0, nxt_inc = matrix->width; 
-	i < N; 
-	i += 8, nxt_a += 8) {
-
-	  /* Check if it is time to increse value */
-	  if (i == nxt_inc) {
-		nxt_inc += matrix->width;
-		value += inc;
-	  }
-
-  	  /* Initialize main vector */
-  	  __m256 vec_a = _mm256_set1_ps(value);
-
-	  /* Store the elements of the vectors in the arrays */
-	  _mm256_store_ps(nxt_a, vec_a);
-  }
 
   return 1;
 }
@@ -311,6 +281,8 @@ int main_func(int argc, char *argv[]) {
     thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
     thread_data_array[t].buffer_size = N;
     thread_data_array[t].stride = VECTOR_SIZE;
+    thread_data_array[t].mat_size = matrixA->height * matrixA->width;
+    thread_data_array[t].mat_value = matrixA->rows[0];
 
    
     if (rc = pthread_create(&thread[t], &attr, init_arrays_question1, (void *) &thread_data_array[t])) {

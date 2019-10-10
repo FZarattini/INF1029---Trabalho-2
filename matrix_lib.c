@@ -9,13 +9,6 @@ struct matrix {
 	float *rows;
 };
 
-struct thread_data{
-  int thread_id;
-  long unsigned int buffer_begin;
-  long unsigned int buffer_end;
-  long unsigned int buffer_size;
-  long unsigned int stride;
-};
 
 float *ma = NULL;
 float *mb = NULL;
