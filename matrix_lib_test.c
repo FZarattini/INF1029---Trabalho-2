@@ -19,6 +19,7 @@ struct thread_data{
 };
 
 float scalar_value = 0.0f;
+float global_ma_value;
 
 struct matrix matrixA, matrixB, matrixC;
 
@@ -122,6 +123,31 @@ int initialize_matrix(struct matrix *matrix, float value, float inc) {
   return 1;
 }
 
+void *init_arrays_question1(void *threadarg) {
+  struct thread_data *my_data;
+
+  my_data = (struct thread_data *) threadarg;
+
+  float *nxt_ma = ma + my_data->buffer_begin;
+  float *nxt_scalar = scalar + my_data->buffer_begin;
+
+  /* Initialize the two argument arrays */
+  __m256 vec_ma = _mm256_broadcast_ss(&global_ma_value);
+  __m256 vec_scalar = __mm256_broadcast_ss(&global_scalar_value);;
+
+  for (long unsigned int i = my_data->buffer_begin;
+	i < my_data->buffer_end; 
+	i += my_data->stride, nxt_evens += my_data->stride, nxt_odds += my_data->stride) {
+
+	/* Store the elements of the result array */
+        _mm256_store_ps(nxt_ma, vec_ma);
+        _mm256_store_ps(nxt_scalar, vec_scalar);
+ }
+
+ pthread_exit(NULL);
+}
+
+
 int print_matrix(struct matrix *matrix) {
   unsigned long int i;
   unsigned long int N;
@@ -223,45 +249,6 @@ int main_func(int argc, char *argv[]) {
 	return 1;
   }
 
-  /* Define auxiliary variables to work with threads */
-
-  struct thread_data thread_data_array[NUM_THREADS];
-  pthread_t thread[NUM_THREADS];
-  pthread_att_t attr;
-  int rc;
-  long t;
-  void *status;
-  //Chunk do buffer para primeira função é apenas referente ao vetor A
-  long unsigned int buffer_chunk = (DimA_M * DimA_N) / NUM_THREADS;
-
-  /* Initialize and set thread detached attribute */
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-  /* Create threads to initialize arrays */
-  for (t = 0; t < NUM_THREADS; t++){
-    thread_data_array[t].thread_id = t;
-    thread_data_array[t].buffer_begin = t * buffer_chunk;
-    thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
-    thread_data_array[t].buffer_size = N;
-    thread_data_array[t].stride = VECTOR_SIZE;
-
-    //EU ACHO QUE AQUI TEM QUE CHAMAR A INITIALIZE_MATRIX, MAS NAO TEMOS O VALOR QUE TEM QUE COLOCAR NA MATRIZ A PORQUE NAO TEM O PARSE DO ARQUIVO AQUI
-    /*if (rc = pthread_create(&thread[t], &attr, initialize_matrix(&matrixA, ), (void *) &thread_data_array[t])) {
-      printf("ERROR; return code from pthread_create() is %d\n", rc);
-      exit(-1);
-    }*/
-  }
-
-  /* Free attribute and wait for the other threads */
-  pthread_attr_destroy(&attr);
-  for(t=0; t<NUM_THREADS; t++) {
-    if (rc = pthread_join(thread[t], &status)) {
-      printf("ERROR; return code from pthread_join() is %d\n", rc);
-      exit(-1);
-    }
-  }
-
   /* Initialize the three matrixes */
   matrixA.height = DimA_M;
   matrixA.width = DimA_N;
@@ -300,6 +287,48 @@ int main_func(int argc, char *argv[]) {
   /* Print matrix */
   printf("---------- Matrix C ----------\n");
   print_matrix(&matrixC);
+
+
+  /* Define auxiliary variables to work with threads */
+
+  struct thread_data thread_data_array[NUM_THREADS];
+  pthread_t thread[NUM_THREADS];
+  pthread_att_t attr;
+  int rc;
+  long t;
+  void *status;
+  //Chunk do buffer para primeira função é apenas referente ao vetor A
+  long unsigned int buffer_chunk = (DimA_M * DimA_N) / NUM_THREADS;
+
+  /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to initialize arrays */
+  for (t = 0; t < NUM_THREADS; t++){
+    thread_data_array[t].thread_id = t;
+    thread_data_array[t].buffer_begin = t * buffer_chunk;
+    thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+    thread_data_array[t].buffer_size = N;
+    thread_data_array[t].stride = VECTOR_SIZE;
+
+   
+    if (rc = pthread_create(&thread[t], &attr, init_arrays_question1, (void *) &thread_data_array[t])) {
+      printf("ERROR; return code from pthread_create() is %d\n", rc);
+      exit(-1);
+    }
+  }
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM_THREADS; t++) {
+    if (rc = pthread_join(thread[t], &status)) {
+      printf("ERROR; return code from pthread_join() is %d\n", rc);
+      exit(-1);
+    }
+  }
+
+
 
   /* Scalar product of matrix A */
   printf("Executing scalar_matrix_mult(%5.1f, matrixA)...\n",scalar_value);

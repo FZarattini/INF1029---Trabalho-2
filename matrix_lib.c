@@ -29,6 +29,14 @@ float global_ma_value = 0.0f;
 float global_mb_value = 0.0f;
 float global_mc_value = 0.0f;
 
+int global_num_thrads =1;
+
+void set_number_threads(int num_threads)
+{
+	global_num_threads = num_threads;
+}
+
+
 /* Thread to multiply arrays */
 void *mult_arrays_scalar(void *threadarg) {
   struct thread_data *my_data;
@@ -59,6 +67,7 @@ void *mult_arrays_scalar(void *threadarg) {
 }
 
 /* Thread to initialize arrays */
+
 void *init_arrays_scalar(void *threadarg) {
   struct thread_data *my_data;
 
@@ -68,7 +77,7 @@ void *init_arrays_scalar(void *threadarg) {
   float *nxt_scalar = scalar + my_data->buffer_begin;
 
   /* Initialize the two argument arrays */
-  __m256 vec_ma = _mm256_broadcast_ss(&ma_value);
+  __m256 vec_ma = _mm256_broadcast_ss(&global_ma_value);
   __m256 vec_scalar = __mm256_broadcast_ss(&global_scalar_value);;
 
   for (long unsigned int i = my_data->buffer_begin;
@@ -83,8 +92,9 @@ void *init_arrays_scalar(void *threadarg) {
  pthread_exit(NULL);
 }
 
+
 int scalar_matrix_mult(float scalar_value, struct matrix *matrix) {
-  unsigned long int i;
+unsigned long int i;
   unsigned long int N;
   global_scalar_value = scalar_value;
   global_ma_value = matrix->rows[0];
@@ -102,17 +112,78 @@ int scalar_matrix_mult(float scalar_value, struct matrix *matrix) {
   float *nxt_matrix_a = matrix->rows; 
   float *nxt_result = matrix->rows; 
 
-  for ( i = 0; 
-	i < N; 
-	i += 8, nxt_matrix_a += 8, nxt_result += 8) {
-	  /* Initialize the three argument vectors */
-	  __m256 vec_matrix_a = _mm256_load_ps(nxt_matrix_a);
 
-	  /* Compute the expression res = a * b + c between the three vectors */
-	  __m256 vec_result = _mm256_mul_ps(vec_scalar_value, vec_matrix_a);
 
-	  /* Store the elements of the result vector */
-	  _mm256_store_ps(nxt_result, vec_result);
+
+ /* Define auxiliary variables to work with threads */
+  struct thread_data thread_data_array[global_num_thrads];
+  pthread_t thread[global_num_thrads];
+  pthread_attr_t attr;
+  int rc;
+  long t;
+  void *status;
+  long unsigned int buffer_chunk = N / global_num_thrads;
+
+  /* Initialize argument arrays */
+  printf("Initializing arrays...");
+
+  /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to initialize arrays */
+  for(t=0; t<global_num_thrads; t++){
+	thread_data_array[t].thread_id = t;
+	thread_data_array[t].buffer_begin = t * buffer_chunk;
+	thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+	thread_data_array[t].buffer_size = N;
+	thread_data_array[t].stride = VECTOR_SIZE;
+
+	if (rc = pthread_create(&thread[t], &attr, init_arrays_scalar, (void *) &thread_data_array[t])) {
+	  printf("ERROR; return code from pthread_create() is %d\n", rc);
+	  exit(-1);
+	}
+  }
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM_THREADS; t++) {
+	if (rc = pthread_join(thread[t], &status)) {
+		printf("ERROR; return code from pthread_join() is %d\n", rc);
+		exit(-1);
+	}
+  }
+
+
+
+/* Compute the product of two arrays and store the result in a third array*/
+  printf("Processing arrays...");
+
+  /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to calculate product of arrays */
+  for(t=0; t<global_num_thrads; t++){
+	thread_data_array[t].thread_id = t;
+	thread_data_array[t].buffer_begin = t * buffer_chunk;
+	thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+	thread_data_array[t].buffer_size = N;
+	thread_data_array[t].stride = VECTOR_SIZE;
+
+	if (rc = pthread_create(&thread[t], &attr, mult_arrays_scalar, (void *) &thread_data_array[t])) {
+          printf("ERROR; return code from pthread_create() is %d\n", rc);
+          exit(-1);
+       }
+  }
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM_THREADS; t++) {
+	if (rc = pthread_join(thread[t], &status)) {
+		printf("ERROR; return code from pthread_join() is %d\n", rc);
+		exit(-1);
+	}
   }
 
   return 1;
