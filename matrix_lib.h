@@ -4,7 +4,7 @@ struct matrix {
 	float *rows;
 };
 
-struct thread_data{
+typedef struct thread_data{
   int thread_id;
   long unsigned int buffer_begin;
   long unsigned int buffer_end;
@@ -12,7 +12,8 @@ struct thread_data{
   long unsigned int stride;
   int mat_size;
   float mat_value;
-};
+  float* m;
+}THREAD_DATA;
 
 int scalar_matrix_mult(float scalar_value, struct matrix *matrix);
 
