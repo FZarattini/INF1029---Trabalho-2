@@ -4,9 +4,8 @@
 #include <math.h>
 #include <string.h>
 #include <errno.h>
+#include <pthread.h>
 #include "matrix_lib.h"
-
-float scalar_value = 0.0f;
 
 struct matrix matrixA, matrixB, matrixC;
 
@@ -78,28 +77,6 @@ int load_matrix(struct matrix *matrix, char *filename) {
   return 1;
 }
 
-/* Thread to initialize arrays */
-void *init_arrays(void *threadarg) {
-  struct thread_data *my_data;
-
-  my_data = (struct thread_data *) threadarg;
-
-  float *nxt_matrix = my_data.mem + my_data->buffer_begin;
-
-  /* Initialize the two argument arrays */
-  __m256 vec_matrix= _mm256_broadcast_ss(my_data->m_value);
-
-  for (long unsigned int i = my_data->buffer_begin;
-	i < my_data->buffer_end; 
-	i += my_data->stride, nxt_evens += my_data->stride, nxt_odds += my_data->stride) {
-
-	/* Store the elements of the result array */
-        _mm256_store_ps(nxt_matrix, vec_matrix);
- }
-
- pthread_exit(NULL);
-}
-
 
 int print_matrix(struct matrix *matrix) {
   unsigned long int i;
@@ -147,17 +124,26 @@ int check_errors(struct matrix *matrix, float scalar_value) {
   return 1;
 }
 
-int main_func(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
   unsigned long int DimA_M, DimA_N, DimB_M, DimB_N;
+  float scalar_value = 0.0f;
   int NUM_THREADS;
   char *matrixA_filename, *matrixB_filename, *result1_filename, *result2_filename;
   char *eptr = NULL;
+
+
+a = NULL;
+b = NULL;
+c = NULL;
+result = NULL;
+scalar = NULL;
+NUM__THREADS = 1;
 
   // Disable buffering entirely
   setbuf(stdout, NULL);
 
   // Check arguments
-  if (argc != 10) {
+  if (argc != 11) {
         printf("Usage: %s <scalar_value> <DimA_M> <DimA_N> <DimB_M> <DimB_N> <matrixA_filename> <matrixB_filename> <result1_filename> <result2_filename>\n", argv[0]);
         return 0;
   } else {
@@ -202,6 +188,8 @@ int main_func(int argc, char *argv[]) {
 	NUM_THREADS = 1;
  }
 
+ set_number_threads(NUM_THREADS);
+
   /* Allocate the arrays of the four matrixes */
   a=  (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
   scalar = (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
@@ -228,78 +216,6 @@ int main_func(int argc, char *argv[]) {
   printf("---------- Matrix A ----------\n");
   print_matrix(&matrixA);
 
-//================================ INIT THREAD MATRIX A =========================================//
-
-/* Define auxiliary variables to work with threads */
-  struct thread_data thread_data_array[NUM_THREADS];
-  pthread_t thread[NUM_THREADS];
-  pthread_attr_t attr;
-  int rc;
-  long t;
-  void *status;
-  long unsigned int buffer_chunk = (DimA_M * DimA_N) / NUM_THREADS;
-
-  /* Initialize and set thread detached attribute */
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-  /* Create threads to initialize arrays */
-  for(t=0; t<NUM_THREADS; t++){
-	thread_data_array[t].thread_id = t;
-	thread_data_array[t].buffer_begin = t * buffer_chunk;
-	thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
-	thread_data_array[t].buffer_size = (DimA_M * DimA_N);
-	thread_data_array[t].stride = VECTOR_SIZE;
-	thread_data_array[t].m_value = matrixA->rows[0];
-
-	if (rc = pthread_create(&thread[t], &attr, init_arrays, (void *) &thread_data_array[t])) {
-	  printf("ERROR; return code from pthread_create() is %d\n", rc);
-	  exit(-1);
-	}
-  }
-
-  /* Free attribute and wait for the other threads */
-  pthread_attr_destroy(&attr);
-  for(t=0; t<NUM_THREADS; t++) {
-	if (rc = pthread_join(thread[t], &status)) {
-		printf("ERROR; return code from pthread_join() is %d\n", rc);
-		exit(-1);
-	}
-  }
-
-//====================================================================================
-
-//============================= INIT THREAD SCALAR ===================================
- /* Initialize and set thread detached attribute */
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-  /* Create threads to calculate product of arrays */
-  for(t=0; t<NUM_THREADS; t++){
-	thread_data_array[t].thread_id = t;
-	thread_data_array[t].buffer_begin = t * buffer_chunk;
-	thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
-	thread_data_array[t].buffer_size = (DimA_M * DimA_N);
-	thread_data_array[t].stride = VECTOR_SIZE;
-	thread_data_array[t].m_value = scalar_value;
-
-	if (rc = pthread_create(&thread[t], &attr, init_arrays, (void *) &thread_data_array[t])) {
-          printf("ERROR; return code from pthread_create() is %d\n", rc);
-          exit(-1);
-       }
-  }
-
-
-  /* Free attribute and wait for the other threads */
-  pthread_attr_destroy(&attr);
-  for(t=0; t<NUM_THREADS; t++) {
-	if (rc = pthread_join(thread[t], &status)) {
-		printf("ERROR; return code from pthread_join() is %d\n", rc);
-		exit(-1);
-	}
-  }
-
-//====================================================================================
 //============================ MULT POR SCALAR THREAD  ===============================
   /* Scalar product of matrix A */
   printf("Executing mult_arrays(%5.1f, matrixA)...\n",scalar_value);
@@ -322,23 +238,6 @@ int main_func(int argc, char *argv[]) {
 
   /* Check for errors */
   //check_errors(&matrixA, 10.0f);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
   matrixB.height = DimB_M;
@@ -373,11 +272,9 @@ int main_func(int argc, char *argv[]) {
 	printf("%s: matrix_matrix_mult problem.", argv[0]);
 	return 1;
   }
-
   // Print matrix //
   printf("---------- Matrix C ----------\n");
   print_matrix(&matrixC);
-
   // Write second result //
   if (!store_matrix(&matrixC, result2_filename)) {
 	printf("%s: failed to write second result to file.", argv[0]);
