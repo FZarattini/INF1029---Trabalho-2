@@ -1,8 +1,8 @@
-struct matrix {
+typedef struct matrix {
 	unsigned long int height;
 	unsigned long int width;
 	float *rows;
-};
+}MATRIX;
 
 typedef struct thread_data{
   int thread_id;
@@ -10,9 +10,7 @@ typedef struct thread_data{
   long unsigned int buffer_end;
   long unsigned int buffer_size;
   long unsigned int stride;
-  int mat_size;
-  float mat_value;
-  float* m;
+  MATRIX* mat;
 }THREAD_DATA;
 
 int scalar_matrix_mult(float scalar_value, struct matrix *matrix);
