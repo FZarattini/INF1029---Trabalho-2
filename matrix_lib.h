@@ -4,16 +4,22 @@ struct matrix {
 	float *rows;
 };
 
-typedef struct thread_data{
-  int thread_id;
-  long unsigned int buffer_begin;
-  long unsigned int buffer_end;
-  long unsigned int buffer_size;
-  long unsigned int stride;
-  int mat_size;
-  float mat_value;
-  float* m;
-}THREAD_DATA;
+struct thread_data {
+	int thread_id;
+	long unsigned int buffer_begin;
+	long unsigned int buffer_end;
+	long unsigned int buffer_size;
+	long unsigned int stride;
+	long unsigned int m_value;
+};
+
+float *a = NULL;
+float *b = NULL;
+float *c = NULL;
+float *result = NULL;
+float *scalar = NULL;
+
+#define VECTOR_SIZE 8
 
 int scalar_matrix_mult(float scalar_value, struct matrix *matrix);
 

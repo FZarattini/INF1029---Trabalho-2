@@ -1,5 +1,4 @@
 #include <immintrin.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -7,7 +6,7 @@
 #include <errno.h>
 #include "matrix_lib.h"
 
-#define VECTOR_SIZE 8
+float scalar_value = 0.0f;
 
 struct matrix matrixA, matrixB, matrixC;
 
@@ -79,22 +78,23 @@ int load_matrix(struct matrix *matrix, char *filename) {
   return 1;
 }
 
-void *init_arrays_question1(void *threadarg) {
-  THREAD_DATA *my_data;
+/* Thread to initialize arrays */
+void *init_arrays(void *threadarg) {
+  struct thread_data *my_data;
 
-  my_data = (THREAD_DATA *) threadarg;
+  my_data = (struct thread_data *) threadarg;
 
-  float *nxt_m = my_data->m + my_data->buffer_begin;
+  float *nxt_matrix = my_data.mem + my_data->buffer_begin;
 
   /* Initialize the two argument arrays */
-  __m256 vec_ma = _mm256_broadcast_ss(my_data->mat_value);
+  __m256 vec_matrix= _mm256_broadcast_ss(my_data->m_value);
 
   for (long unsigned int i = my_data->buffer_begin;
 	i < my_data->buffer_end; 
 	i += my_data->stride, nxt_evens += my_data->stride, nxt_odds += my_data->stride) {
 
 	/* Store the elements of the result array */
-        _mm256_store_ps(nxt_m, vec_ma);
+        _mm256_store_ps(nxt_matrix, vec_matrix);
  }
 
  pthread_exit(NULL);
@@ -153,6 +153,9 @@ int main_func(int argc, char *argv[]) {
   char *matrixA_filename, *matrixB_filename, *result1_filename, *result2_filename;
   char *eptr = NULL;
 
+  // Disable buffering entirely
+  setbuf(stdout, NULL);
+
   // Check arguments
   if (argc != 10) {
         printf("Usage: %s <scalar_value> <DimA_M> <DimA_N> <DimB_M> <DimB_N> <matrixA_filename> <matrixB_filename> <result1_filename> <result2_filename>\n", argv[0]);
@@ -169,13 +172,15 @@ int main_func(int argc, char *argv[]) {
   DimA_N = strtol(argv[3], &eptr, 10);
   DimB_M = strtol(argv[4], &eptr, 10);
   DimB_N = strtol(argv[5], &eptr, 10);
+
   NUM_THREADS = strtol(argv[6], &eptr, 10);
+
   matrixA_filename = argv[7];
   matrixB_filename = argv[8];
   result1_filename = argv[9];
   result2_filename = argv[10];
 
-  if ((scalar_value == 0.0f) || (DimA_M == 0) || (DimA_N == 0) || (DimB_M == 0) || (DimB_N == 0) || NUM_THREADS == 0) {
+  if ((scalar_value == 0.0f) || (DimA_M == 0) || (DimA_N == 0) || (DimB_M == 0) || (DimB_N == 0)) {
         printf("%s: erro na conversao do argumento: errno = %d\n", argv[0], errno);
 
         /* If a conversion error occurred, display a message and exit */
@@ -192,10 +197,17 @@ int main_func(int argc, char *argv[]) {
 	}
   }
 
+ if(NUM_THREADS == 0)
+ {
+	NUM_THREADS = 1;
+ }
+
   /* Allocate the arrays of the four matrixes */
-  float *a=  (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
-  float *b = (float*)aligned_alloc(32, DimB_M*DimB_N*sizeof(float));
-  float *c = (float*)aligned_alloc(32, DimA_M*DimB_N*sizeof(float));
+  a=  (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
+  scalar = (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
+  b = (float*)aligned_alloc(32, DimB_M*DimB_N*sizeof(float));
+  c = (float*)aligned_alloc(32, DimA_M*DimB_N*sizeof(float));
+  
 
   if ((a == NULL) || (b == NULL) || (c == NULL)) {
 	printf("%s: array allocation problem.", argv[0]);
@@ -215,6 +227,119 @@ int main_func(int argc, char *argv[]) {
   /* Print matrix */
   printf("---------- Matrix A ----------\n");
   print_matrix(&matrixA);
+
+//================================ INIT THREAD MATRIX A =========================================//
+
+/* Define auxiliary variables to work with threads */
+  struct thread_data thread_data_array[NUM_THREADS];
+  pthread_t thread[NUM_THREADS];
+  pthread_attr_t attr;
+  int rc;
+  long t;
+  void *status;
+  long unsigned int buffer_chunk = (DimA_M * DimA_N) / NUM_THREADS;
+
+  /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to initialize arrays */
+  for(t=0; t<NUM_THREADS; t++){
+	thread_data_array[t].thread_id = t;
+	thread_data_array[t].buffer_begin = t * buffer_chunk;
+	thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+	thread_data_array[t].buffer_size = (DimA_M * DimA_N);
+	thread_data_array[t].stride = VECTOR_SIZE;
+	thread_data_array[t].m_value = matrixA->rows[0];
+
+	if (rc = pthread_create(&thread[t], &attr, init_arrays, (void *) &thread_data_array[t])) {
+	  printf("ERROR; return code from pthread_create() is %d\n", rc);
+	  exit(-1);
+	}
+  }
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM_THREADS; t++) {
+	if (rc = pthread_join(thread[t], &status)) {
+		printf("ERROR; return code from pthread_join() is %d\n", rc);
+		exit(-1);
+	}
+  }
+
+//====================================================================================
+
+//============================= INIT THREAD SCALAR ===================================
+ /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to calculate product of arrays */
+  for(t=0; t<NUM_THREADS; t++){
+	thread_data_array[t].thread_id = t;
+	thread_data_array[t].buffer_begin = t * buffer_chunk;
+	thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+	thread_data_array[t].buffer_size = (DimA_M * DimA_N);
+	thread_data_array[t].stride = VECTOR_SIZE;
+	thread_data_array[t].m_value = scalar_value;
+
+	if (rc = pthread_create(&thread[t], &attr, init_arrays, (void *) &thread_data_array[t])) {
+          printf("ERROR; return code from pthread_create() is %d\n", rc);
+          exit(-1);
+       }
+  }
+
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM_THREADS; t++) {
+	if (rc = pthread_join(thread[t], &status)) {
+		printf("ERROR; return code from pthread_join() is %d\n", rc);
+		exit(-1);
+	}
+  }
+
+//====================================================================================
+//============================ MULT POR SCALAR THREAD  ===============================
+  /* Scalar product of matrix A */
+  printf("Executing mult_arrays(%5.1f, matrixA)...\n",scalar_value);
+
+
+  if (!scalar_matrix_mult(scalar_value, &matrixA)) {
+	printf("%s: scalar_matrix_mult problem.", argv[0]);
+	return 1;
+  }
+
+  /* Print matrix */
+  printf("---------- Matrix A ----------\n");
+  print_matrix(&matrixA);
+
+  /* Write first result */
+  if (!store_matrix(&matrixA, result1_filename)) {
+	printf("%s: failed to write first result to file.", argv[0]);
+	return 1;
+  }
+
+  /* Check for errors */
+  //check_errors(&matrixA, 10.0f);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   matrixB.height = DimB_M;
   matrixB.width = DimB_N;
@@ -241,115 +366,23 @@ int main_func(int argc, char *argv[]) {
   printf("---------- Matrix C ----------\n");
   print_matrix(&matrixC);
 
-
-  /* Define auxiliary variables to work with threads */
-
-  THREAD_DATA thread_data_array[NUM_THREADS];
-  pthread_t thread[NUM_THREADS];
-  pthread_att_t attr;
-  int rc;
-  long t;
-  void *status;
-  //Chunk do buffer para primeira função é apenas referente ao vetor A
-  long unsigned int buffer_chunk = (DimA_M * DimA_N) / NUM_THREADS;
-
-  /* Initialize and set thread detached attribute */
-  pthread_attr_init(&attr);
-  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-  /* Create threads to initialize arrays */
-  /* Initialize Matrix A */
-  for (t = 0; t < NUM_THREADS; t++){
-    thread_data_array[t].thread_id = t;
-    thread_data_array[t].buffer_begin = t * buffer_chunk;
-    thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
-    thread_data_array[t].buffer_size = N;
-    thread_data_array[t].stride = VECTOR_SIZE;
-    thread_data_array[t].mat_size = matrixA->height * matrixA->width;
-    thread_data_array[t].mat_value = matrixA->rows[0];
-    thread_data_array[t].m = NULL;
-
-   
-    if (rc = pthread_create(&thread[t], &attr, init_arrays_question1, (void *) &thread_data_array[t])) {
-      printf("ERROR; return code from pthread_create() is %d\n", rc);
-      exit(-1);
-    }
-  }
-
-  /* Free attribute and wait for the other threads */
-  pthread_attr_destroy(&attr);
-  for(t=0; t<NUM_THREADS; t++) {
-    if (rc = pthread_join(thread[t], &status)) {
-      printf("ERROR; return code from pthread_join() is %d\n", rc);
-      exit(-1);
-    }
-  }
-
-  /* Create threads to initialize arrays */
-  /* Initialize Scalar */
-  for (t = 0; t < NUM_THREADS; t++){
-    thread_data_array[t].thread_id = t;
-    thread_data_array[t].buffer_begin = t * buffer_chunk;
-    thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
-    thread_data_array[t].buffer_size = N;
-    thread_data_array[t].stride = VECTOR_SIZE;
-    thread_data_array[t].mat_size = matrixA->height * matrixA->width;
-    thread_data_array[t].mat_value = scalar_value;
-    thread_data_array[t].m = NULL;
-
-   
-    if (rc = pthread_create(&thread[t], &attr, init_arrays_question1, (void *) &thread_data_array[t])) {
-      printf("ERROR; return code from pthread_create() is %d\n", rc);
-      exit(-1);
-    }
-  }
-
-  /* Free attribute and wait for the other threads */
-  pthread_attr_destroy(&attr);
-  for(t=0; t<NUM_THREADS; t++) {
-    if (rc = pthread_join(thread[t], &status)) {
-      printf("ERROR; return code from pthread_join() is %d\n", rc);
-      exit(-1);
-    }
-  }
-
-
-  /* Scalar product of matrix A */
-  printf("Executing scalar_matrix_mult(%5.1f, matrixA)...\n",scalar_value);
-  if (!scalar_matrix_mult(scalar_value, &matrixA)) {
-	printf("%s: scalar_matrix_mult problem.", argv[0]);
-	return 1;
-  }
-
-  /* Print matrix */
-  printf("---------- Matrix A ----------\n");
-  print_matrix(&matrixA);
-
-  /* Write first result */
-  if (!store_matrix(&matrixA, result1_filename)) {
-	printf("%s: failed to write first result to file.", argv[0]);
-	return 1;
-  }
-
-  /* Check for errors */
-  //check_errors(&matrixA, 10.0f);
-
-  /* Calculate the product between matrix A and matrix B */
+/*
+  // Calculate the product between matrix A and matrix B//
   printf("Executing matrix_matrix_mult(matrixA, mattrixB, matrixC)...\n");
   if (!matrix_matrix_mult(&matrixA, &matrixB, &matrixC)) {
 	printf("%s: matrix_matrix_mult problem.", argv[0]);
 	return 1;
   }
 
-  /* Print matrix */
+  // Print matrix //
   printf("---------- Matrix C ----------\n");
   print_matrix(&matrixC);
 
-  /* Write second result */
+  // Write second result //
   if (!store_matrix(&matrixC, result2_filename)) {
 	printf("%s: failed to write second result to file.", argv[0]);
 	return 1;
-  }
+  }*/
 
   /* Check foor errors */
   //check_errors(&matrixC, 160.0f);

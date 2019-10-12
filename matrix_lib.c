@@ -1,5 +1,4 @@
 #include <immintrin.h>
-#include <pthread.h>
 
 #define VECTOR_SIZE 8
 
@@ -9,35 +8,149 @@ struct matrix {
 	float *rows;
 };
 
-int scalar_matrix_mult(float scalar_value, struct matrix *matrix) {
-  unsigned long int i;
-  unsigned long int N;
+/* Thread to multiply arrays */
+void *mult_arrays(void *threadarg) {
+  struct thread_data *my_data;
 
-  /* Check the numbers of the elements of the matrix */
-  N = matrix->height * matrix->width;
+  my_data = (struct thread_data *) threadarg;
 
-  /* Check the integrity of the matrix */
-  if (N == 0 || matrix->rows == NULL) return 0;
+  float *nxt_a = a + my_data->buffer_begin;
+  float *nxt_scalar = scalar + my_data->buffer_begin;
+  float *nxt_result = a + my_data->buffer_begin;
 
-  /* Initialize the scalar vector with the scalar value */
-  __m256 vec_scalar_value = _mm256_set1_ps(scalar_value);
+  for (long unsigned int i = my_data->buffer_begin;
+	i < my_data->buffer_end; 
+	i += my_data->stride, nxt_a += my_data->stride, 
+	nxt_scalar += my_data->stride, nxt_result += my_data->stride) {
 
-  /* Compute the product between the scalar value and the elements of the matrix */
-  float *nxt_matrix_a = matrix->rows; 
-  float *nxt_result = matrix->rows; 
+	/* Initialize the two argument arrays */
+          __m256 vec_a2 = _mm256_load_ps(nxt_a);
+          __m256 vec_scalar2  = _mm256_load_ps(nxt_scalar);
 
-  for ( i = 0; 
-	i < N; 
-	i += 8, nxt_matrix_a += 8, nxt_result += 8) {
-	  /* Initialize the three argument vectors */
-	  __m256 vec_matrix_a = _mm256_load_ps(nxt_matrix_a);
+       /* Compute the difference between the two arrays */
+          __m256 vec_result = _mm256_mul_ps(vec_a2, vec_scalar2);
 
-	  /* Compute the expression res = a * b + c between the three vectors */
-	  __m256 vec_result = _mm256_mul_ps(vec_scalar_value, vec_matrix_a);
-
-	  /* Store the elements of the result vector */
-	  _mm256_store_ps(nxt_result, vec_result);
+       /* Store the elements of the result array */
+          _mm256_store_ps(nxt_result, vec_result);
   }
+
+  pthread_exit(NULL);
+}
+
+
+int scalar_matrix_mult(float scalar_value, struct matrix *matrix) {
+  /* Check the integrity of the matrix */
+  if (matrix->rows == NULL) return 0;
+
+/* Define auxiliary variables to work with threads */
+  struct thread_data thread_data_array[NUM_THREADS];
+  pthread_t thread[NUM_THREADS];
+  pthread_attr_t attr;
+  int rc;
+  long t;
+  void *status;
+  long unsigned int buffer_chunk = (matrix.height * matrix.width) / NUM_THREADS;
+
+  /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to calculate product of arrays */
+  for(t=0; t<NUM_THREADS; t++){
+	thread_data_array[t].thread_id = t;
+	thread_data_array[t].buffer_begin = t * buffer_chunk;
+	thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+	thread_data_array[t].buffer_size = (matrix.height * matrix.width)
+	thread_data_array[t].stride = VECTOR_SIZE;
+	thread_data_array[t].m_value = scalar_value;
+
+	if (rc = pthread_create(&thread[t], &attr, init_arrays, (void *) &thread_data_array[t])) {
+          printf("ERROR; return code from pthread_create() is %d\n", rc);
+          exit(-1);
+       }
+  }
+
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM_THREADS; t++) {
+	if (rc = pthread_join(thread[t], &status)) {
+		printf("ERROR; return code from pthread_join() is %d\n", rc);
+		exit(-1);
+	}
+  }
+
+
+
+
+
+
+
+/* Define auxiliary variables to work with threads */
+  struct thread_data thread_data_array[NUM_THREADS];
+  pthread_t thread[NUM_THREADS];
+  pthread_attr_t attr;
+  int rc;
+  long t;
+  void *status;
+  long unsigned int buffer_chunk = (matrix.height * matrix.width) / NUM_THREADS;
+
+  /* Initialize argument arrays */
+  printf("Initializing arrays...");
+  gettimeofday(&start, NULL);
+
+  /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to initialize arrays */
+  for(t=0; t<NUM_THREADS; t++){
+	thread_data_array[t].thread_id = t;
+	thread_data_array[t].buffer_begin = t * buffer_chunk;
+	thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+	thread_data_array[t].buffer_size = (matrix.height * matrix.width);
+	thread_data_array[t].stride = VECTOR_SIZE;
+
+	if (rc = pthread_create(&thread[t], &attr, mult_arrays, (void *) &thread_data_array[t])) {
+	  printf("ERROR; return code from pthread_create() is %d\n", rc);
+	  exit(-1);
+	}
+  }
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM_THREADS; t++) {
+	if (rc = pthread_join(thread[t], &status)) {
+		printf("ERROR; return code from pthread_join() is %d\n", rc);
+		exit(-1);
+	}
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   return 1;
 }
