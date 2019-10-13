@@ -132,11 +132,11 @@ int main(int argc, char *argv[]) {
   char *eptr = NULL;
 
 
-a = NULL;
-b = NULL;
-c = NULL;
-result = NULL;
-scalar = NULL;
+mem_a = NULL;
+mem_b = NULL;
+mem_c = NULL;
+mem_result = NULL;
+mem_scalar = NULL;
 NUM__THREADS = 1;
 
   // Disable buffering entirely
@@ -191,13 +191,13 @@ NUM__THREADS = 1;
  set_number_threads(NUM_THREADS);
 
   /* Allocate the arrays of the four matrixes */
-  a=  (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
-  scalar = (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
-  b = (float*)aligned_alloc(32, DimB_M*DimB_N*sizeof(float));
-  c = (float*)aligned_alloc(32, DimA_M*DimB_N*sizeof(float));
+  mem_a=  (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
+  mem_scalar = (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
+  mem_b = (float*)aligned_alloc(32, DimB_M*DimB_N*sizeof(float));
+  mem_c = (float*)aligned_alloc(32, DimA_M*DimB_N*sizeof(float));
   
 
-  if ((a == NULL) || (b == NULL) || (c == NULL)) {
+  if ((mem_a == NULL) || (mem_b == NULL) || (mem_c == NULL)) {
 	printf("%s: array allocation problem.", argv[0]);
 	return 1;
   }
@@ -205,7 +205,7 @@ NUM__THREADS = 1;
   /* Initialize the three matrixes */
   matrixA.height = DimA_M;
   matrixA.width = DimA_N;
-  matrixA.rows = a;
+  matrixA.rows = mem_a;
   //if (!initialize_matrix(&matrixA, 5.0f, 0.0f)) {
   if (!load_matrix(&matrixA, matrixA_filename)) {
 	printf("%s: matrixA initialization problem.", argv[0]);
@@ -242,7 +242,7 @@ NUM__THREADS = 1;
 
   matrixB.height = DimB_M;
   matrixB.width = DimB_N;
-  matrixB.rows = b;
+  matrixB.rows = mem_b;
   //if (!initialize_matrix(&matrixB, 1.0f, 0.0f)) {
   if (!load_matrix(&matrixB, matrixB_filename)) {
 	printf("%s: matrixB initialization problem.", argv[0]);
@@ -255,7 +255,7 @@ NUM__THREADS = 1;
 
   matrixC.height = DimA_M;
   matrixC.width = DimB_N;
-  matrixC.rows = c;
+  matrixC.rows = mem_c;
 //  if (!initialize_matrix(&matrixC, 0.0f, 0.0f)) {
 //	printf("%s: matrixC initialization problem.", argv[0]);
 //	return 1;
@@ -264,6 +264,7 @@ NUM__THREADS = 1;
   /* Print matrix */
   printf("---------- Matrix C ----------\n");
   print_matrix(&matrixC);
+
 
   // Calculate the product between matrix A and matrix B//
   printf("Executing matrix_matrix_mult(matrixA, mattrixB, matrixC)...\n");
@@ -278,7 +279,7 @@ NUM__THREADS = 1;
   if (!store_matrix(&matrixC, result2_filename)) {
 	printf("%s: failed to write second result to file.", argv[0]);
 	return 1;
-  }*/
+  }
 
   /* Check foor errors */
   //check_errors(&matrixC, 160.0f);

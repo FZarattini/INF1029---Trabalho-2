@@ -13,11 +13,11 @@ struct thread_data {
 	float m_value;
 };
 
-float *a;
-float *b;
-float *c;
-float *result;
-float *scalar;
+float *mem_a;
+float *mem_b;
+float *mem_c;
+float *mem_result;
+float *mem_scalar;
 
 float scalar__value;
 int NUM__THREADS;
