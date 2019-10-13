@@ -265,7 +265,6 @@ NUM__THREADS = 1;
   printf("---------- Matrix C ----------\n");
   print_matrix(&matrixC);
 
-/*
   // Calculate the product between matrix A and matrix B//
   printf("Executing matrix_matrix_mult(matrixA, mattrixB, matrixC)...\n");
   if (!matrix_matrix_mult(&matrixA, &matrixB, &matrixC)) {
