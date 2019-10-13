@@ -32,10 +32,56 @@ void *init_arrays_Q1(void *threadarg) {
 
  pthread_exit(NULL);
 }
+
+void *init_arrayB_Q2(void *threadarg){
+  struct thread_data *my_data;
+
+  my_data = (struct thread_data *) threadarg;
+
+  float *nxt_b = b + my_data->buffer_begin;
+
+  /* Initialize the two argument arrays */
+
+  for (long unsigned int i = my_data->buffer_begin;
+  i < my_data->buffer_end;
+  i += my_data->stride, nxt_b += my_data->stride){
+
+    __m256 vec_matrix_b = _mm256_load_ps(nxt_b);
+
+    /* Store the elements of the result array */
+
+      _mm256_store_ps(nxt_b, vec_matrix_b);
+  }
+  pthread_exit(NULL);
+
+}
+
+oid *init_arrayC_Q2(void *threadarg){
+  struct thread_data *my_data;
+
+  my_data = (struct thread_data *) threadarg;
+
+  float *nxt_c = c + my_data->buffer_begin;
+
+  /* Initialize the two argument arrays */
+
+  for (long unsigned int i = my_data->buffer_begin;
+  i < my_data->buffer_end;
+  i += my_data->stride, nxt_c += my_data->stride){
+
+    __m256 vec_matrix_c = _mm256_load_ps(nxt_c);
+
+    /* Store the elements of the result array */
+
+      _mm256_store_ps(nxt_c, vec_matrix_c);
+  }
+  pthread_exit(NULL);
+
+}
 //=================================================================================== 
 
 /* ================== Thread to multiply arrays  ====================================*/
-void *mult_arrays_Q1(void *threadarg) {
+void *mult_scalar_Q1(void *threadarg) {
   struct thread_data *my_data;
 
   my_data = (struct thread_data *) threadarg;
@@ -53,12 +99,24 @@ void *mult_arrays_Q1(void *threadarg) {
           __m256 vec_a2 = _mm256_load_ps(nxt_a);
           __m256 vec_scalar2  = _mm256_load_ps(nxt_scalar);
 
-       /* Compute the difference between the two arrays */
+       /* Compute the multiplication between the array and the scalar */
           __m256 vec_result = _mm256_mul_ps(vec_a2, vec_scalar2);
 
        /* Store the elements of the result array */
           _mm256_store_ps(nxt_result, vec_result);
   }
+
+  pthread_exit(NULL);
+}
+
+void *mult_array_Q2(void *threadarg){
+  struct thread_data *my_data;
+
+  my_data = (struct thread_data *) threadarg;
+
+  float *nxt_a = a + my_data->buffer_begin;
+  float *nxt_b = b + my_data->buffer_begin;
+  float *nxt_c = c + my_data->buffer_begin;
 
   pthread_exit(NULL);
 }
@@ -96,7 +154,7 @@ int scalar_matrix_mult(float scalar_value, struct matrix *matrix) {
 	thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
 	thread_data_array[t].buffer_size = (matrix->height * matrix->width);
 	thread_data_array[t].stride = VECTOR_SIZE;
-	thread_data_array[t].m_value = matrix->rows[0];
+	//thread_data_array[t].m_value = matrix->rows[0];
 
 	if (rc = pthread_create(&thread[t], &attr, init_arrays_Q1, (void *) &thread_data_array[t])) {
           printf("ERROR; return code from pthread_create() is %d\n", rc);
@@ -125,7 +183,7 @@ int scalar_matrix_mult(float scalar_value, struct matrix *matrix) {
 	thread_data_array[t].buffer_size = (matrix->height * matrix->width);
 	thread_data_array[t].stride = VECTOR_SIZE;
 
-	if (rc = pthread_create(&thread[t], &attr, mult_arrays_Q1, (void *) &thread_data_array[t])) {
+	if (rc = pthread_create(&thread[t], &attr, mult_scalar_Q1, (void *) &thread_data_array[t])) {
 	  printf("ERROR; return code from pthread_create() is %d\n", rc);
 	  exit(-1);
 	}
@@ -146,7 +204,7 @@ int scalar_matrix_mult(float scalar_value, struct matrix *matrix) {
 //====================================================================================================
 
 
-/*
+
 int matrix_matrix_mult(struct matrix *a, struct matrix *b, struct matrix *c) {
   unsigned long int NA, NB, NC, i, j, k;
   float* nxt_a; 
@@ -168,6 +226,99 @@ int matrix_matrix_mult(struct matrix *a, struct matrix *b, struct matrix *c) {
        (c->height != a->height) ||
        (c->width != b->width) ) return 0;
 
+
+  struct thread_data thread_data_array[NUM__THREADS];
+  pthread_t thread[NUM__THREADS];
+  pthread_attr_t attr;
+  int rc;
+  long t;
+  void *status;
+  long unsigned int buffer_chunk = (matrix->height * matrix->width) / NUM__THREADS;
+
+  /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to initialize array B*/
+  for(t=0; t<NUM__THREADS; t++){
+  thread_data_array[t].thread_id = t;
+  thread_data_array[t].buffer_begin = t * buffer_chunk;
+  thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+  thread_data_array[t].buffer_size = (b->height * b->width);
+  thread_data_array[t].stride = VECTOR_SIZE;
+  //thread_data_array[t].m_value = b->rows[0];
+
+  if (rc = pthread_create(&thread[t], &attr, init_arrayB_Q2, (void *) &thread_data_array[t])) {
+          printf("ERROR; return code from pthread_create() is %d\n", rc);
+          return 0;
+       }
+  }
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM__THREADS; t++) {
+  if (rc = pthread_join(thread[t], &status)) {
+    printf("ERROR; return code from pthread_join() is %d\n", rc);
+    return 0;
+  }
+  }
+
+  /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to initialize array C */
+  for(t=0; t<NUM__THREADS; t++){
+  thread_data_array[t].thread_id = t;
+  thread_data_array[t].buffer_begin = t * buffer_chunk;
+  thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+  thread_data_array[t].buffer_size = (c->height * c->width);
+  thread_data_array[t].stride = VECTOR_SIZE;
+  //thread_data_array[t].m_value = c->rows[0];
+
+  if (rc = pthread_create(&thread[t], &attr, init_arrayC_Q2, (void *) &thread_data_array[t])) {
+          printf("ERROR; return code from pthread_create() is %d\n", rc);
+          return 0;
+       }
+  }
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM__THREADS; t++) {
+  if (rc = pthread_join(thread[t], &status)) {
+    printf("ERROR; return code from pthread_join() is %d\n", rc);
+    return 0;
+  }
+  }
+
+  /* Initialize and set thread detached attribute */
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+  /* Create threads to calculate product of arrays */
+  for(t=0; t<NUM__THREADS; t++){
+  thread_data_array[t].thread_id = t;
+  thread_data_array[t].buffer_begin = t * buffer_chunk;
+  thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
+  thread_data_array[t].buffer_size = (c->height * c->width);
+  thread_data_array[t].stride = VECTOR_SIZE;
+  //thread_data_array[t].m_value = b->rows[0];
+
+  if (rc = pthread_create(&thread[t], &attr, mult_array_Q2, (void *) &thread_data_array[t])) {
+          printf("ERROR; return code from pthread_create() is %d\n", rc);
+          return 0;
+       }
+  }
+
+  /* Free attribute and wait for the other threads */
+  pthread_attr_destroy(&attr);
+  for(t=0; t<NUM__THREADS; t++) {
+  if (rc = pthread_join(thread[t], &status)) {
+    printf("ERROR; return code from pthread_join() is %d\n", rc);
+    return 0;
+  }
+  }
+  /*
   for ( i = 0, nxt_a = a->rows; 
 	i < a->height; 
 	i += 1) {
@@ -209,7 +360,9 @@ int matrix_matrix_mult(struct matrix *a, struct matrix *b, struct matrix *c) {
 	  		_mm256_store_ps(nxt_c, vec_c);
 	  	}
       	  }
-  }
+  }*/
+
+
 
   return 1;
-}*/
+}
