@@ -263,7 +263,6 @@ int scalar_matrix_mult(float scalar_value, struct matrix *matrix) {
 //====================================================================================================
 
 
-
 int matrix_matrix_mult(struct matrix *a, struct matrix *b, struct matrix *c) {
   unsigned long int NA, NB, NC, i, j, k;
   float* nxt_a; 
@@ -303,96 +302,24 @@ long unsigned int buffer_chunk = (c->height * c->width) / NUM__THREADS;
 
 	  	__m256 vec_a = _mm256_set1_ps(*nxt_a);
 		
-
 		 // Compute the product between the scalar vector and the elements of 
 		 //a row of matrixB, 8 elements at a time, and add the result to the 
 		 // respective elements of a row of matrixC, 8 elements at a time.
-		 //
+		 
           	for (k = 0, nxt_c = c->rows + (c->width * i); k < b->width; k += VECTOR_SIZE, nxt_b += VECTOR_SIZE, nxt_c += VECTOR_SIZE) 
 		{
 			// Load part of b row (size of vector) //
-	  		 //__m256 vec_b = _mm256_load_ps(nxt_b);		
-			 long unsigned int buffer_chunk = (b->height * b->width) / NUM__THREADS;
-
- 	  		 
- 	  		   pthread_attr_init(&attr);
- 	  		   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-	  		  
- 	  		   for(t=0; t<NUM__THREADS; t++){
-	  		    thread_data_array[t].thread_id = t;
-	  		    thread_data_array[t].buffer_begin = t * buffer_chunk;
-	  		    thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
-	  		    thread_data_array[t].buffer_size = (b->height * b->width);
- 	  		   thread_data_array[t].stride = VECTOR_SIZE;
- 	  	
-	  		  
-	  		    if (rc = pthread_create(&thread[t], &attr, init_arrayB_Q2, (void *) &thread_data_array[t])) {
-	  		            printf("ERROR; return code from pthread_create() is %d\n", rc);
-  	  		          return 0;
- 	  		        }
- 	  		   }
-
- 	  		
-	  		    pthread_attr_destroy(&attr);
- 	  		   for(t=0; t<NUM__THREADS; t++) {
- 	  		   if (rc = pthread_join(thread[t], &status)) {
- 	  		     printf("ERROR; return code from pthread_join() is %d\n", rc);
- 	  		     return 0;
-	  		    }
- 	  		    }
-
+	  		 __m256 vec_b = _mm256_load_ps(nxt_b);		
 
           		// Initialize vector c with zero or load part of c row (size of vector) //
-			//__m256 vec_c;
-
+			__m256 vec_c;
 
 			if (j == 0) { /// if vec_a is the first scalar vector, vec_c is set to zero//
-	  			
-				//vec_c = _mm256_setzero_ps();
-				long unsigned int buffer_chunk = (c->height * c->width) / NUM__THREADS;
-				// Initialize and set thread detached attribute //
-  				pthread_attr_init(&attr);
- 				pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-  				  // Create threads to initialize array B//
-   				 for(t=0; t<NUM__THREADS; t++){
-   				 thread_data_array[t].thread_id = t;
-   				 thread_data_array[t].buffer_begin = t * buffer_chunk;
-   				 thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
-   				 thread_data_array[t].buffer_size = (c->height * c->width);
-  				  thread_data_array[t].stride = VECTOR_SIZE;
-
-  				  if (rc = pthread_create(&thread[t], &attr, init_arrayCV2_Q2, (void *) &thread_data_array[t])) {
-  				          printf("ERROR; return code from pthread_create() is %d\n", rc);
-   				         return 0;
-    				     }
-   				 }
-
-
+				vec_c = _mm256_setzero_ps();
 
 			} else { // otherwise, load part of c row (size of vector) to vec_c //
-
-				//vec_c = _mm256_load_ps(nxt_c);
-				
-	  			long unsigned int buffer_chunk = (c->height * c->width) / NUM__THREADS;
-				// Initialize and set thread detached attribute //
-  				pthread_attr_init(&attr);
- 				pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-
-  				  // Create threads to initialize array B//
-   				 for(t=0; t<NUM__THREADS; t++){
-   				 thread_data_array[t].thread_id = t;
-   				 thread_data_array[t].buffer_begin = t * buffer_chunk;
-   				 thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
-   				 thread_data_array[t].buffer_size = (c->height * c->width);
-  				  thread_data_array[t].stride = VECTOR_SIZE;
-
-  				  if (rc = pthread_create(&thread[t], &attr, init_arrayCV1_Q2, (void *) &thread_data_array[t])) {
-  				          printf("ERROR; return code from pthread_create() is %d\n", rc);
-   				         return 0;
-    				     }
-   				 }
+				vec_c = _mm256_load_ps(nxt_c);
+			
 			}
 
 				//==================== MULT THREAD FMADD ======================
