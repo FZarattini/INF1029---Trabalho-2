@@ -10,7 +10,11 @@ struct thread_data {
 	long unsigned int buffer_end;
 	long unsigned int buffer_size;
 	long unsigned int stride;
-	float m_value;
+	struct matrix *matrixA;
+	struct matrix *matrixB;
+	struct matrix *matrixC;
+	float scalar;
+
 };
 
 float *mem_a;
@@ -19,7 +23,6 @@ float *mem_c;
 float *mem_result;
 float *mem_scalar;
 
-float scalar__value;
 int NUM__THREADS;
 
 #define VECTOR_SIZE 8
