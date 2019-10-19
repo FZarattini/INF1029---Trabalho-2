@@ -17,12 +17,6 @@ struct thread_data {
 
 };
 
-float *mem_a;
-float *mem_b;
-float *mem_c;
-float *mem_result;
-float *mem_scalar;
-
 int NUM__THREADS;
 
 #define VECTOR_SIZE 8
