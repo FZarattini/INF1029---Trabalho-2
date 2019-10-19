@@ -130,13 +130,12 @@ int main(int argc, char *argv[]) {
   int NUM_THREADS;
   char *matrixA_filename, *matrixB_filename, *result1_filename, *result2_filename;
   char *eptr = NULL;
+float *mem_a;
+float *mem_b;
+float *mem_c;
+float *mem_result;
+float *mem_scalar;
 
-
-mem_a = NULL;
-mem_b = NULL;
-mem_c = NULL;
-mem_result = NULL;
-mem_scalar = NULL;
 NUM__THREADS = 1;
 
   // Disable buffering entirely
