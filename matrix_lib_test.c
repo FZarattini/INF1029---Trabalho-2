@@ -104,26 +104,6 @@ int print_matrix(struct matrix *matrix) {
   return 1;
 }
 
-int check_errors(struct matrix *matrix, float scalar_value) {
-  unsigned long int i;
-  unsigned long int N;
-
-  /* Check the numbers of the elements of the matrix */
-  N = matrix->height * matrix->width;
-
-  /* Check the integrity of the matrix */
-  if (N == 0 || matrix->rows == NULL) return 0;
-
-  /* Check for errors (all values should be equal to scalar_value) */
-  float maxError = 0.0f;
-  float diffError = 0.0f;
-  for (i = 0; i < N; i++)
-    maxError = (maxError > (diffError=fabs(matrix->rows[i]-scalar_value)))? maxError : diffError;
-  printf("Max error: %f\n", maxError);
-
-  return 1;
-}
-
 int main(int argc, char *argv[]) {
   unsigned long int DimA_M, DimA_N, DimB_M, DimB_N;
   float scalar_value = 0.0f;
@@ -133,8 +113,6 @@ int main(int argc, char *argv[]) {
 float *mem_a;
 float *mem_b;
 float *mem_c;
-float *mem_result;
-float *mem_scalar;
 
 NUM__THREADS = 1;
 
@@ -191,7 +169,6 @@ NUM__THREADS = 1;
 
   /* Allocate the arrays of the four matrixes */
   mem_a=  (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
-  mem_scalar = (float*)aligned_alloc(32, DimA_M*DimA_N*sizeof(float));
   mem_b = (float*)aligned_alloc(32, DimB_M*DimB_N*sizeof(float));
   mem_c = (float*)aligned_alloc(32, DimA_M*DimB_N*sizeof(float));
   
@@ -205,7 +182,6 @@ NUM__THREADS = 1;
   matrixA.height = DimA_M;
   matrixA.width = DimA_N;
   matrixA.rows = mem_a;
-  //if (!initialize_matrix(&matrixA, 5.0f, 0.0f)) {
   if (!load_matrix(&matrixA, matrixA_filename)) {
 	printf("%s: matrixA initialization problem.", argv[0]);
 	return 1;
@@ -235,14 +211,10 @@ NUM__THREADS = 1;
 	return 1;
   }
 
-  /* Check for errors */
-  //check_errors(&matrixA, 10.0f);
-
 
   matrixB.height = DimB_M;
   matrixB.width = DimB_N;
   matrixB.rows = mem_b;
-  //if (!initialize_matrix(&matrixB, 1.0f, 0.0f)) {
   if (!load_matrix(&matrixB, matrixB_filename)) {
 	printf("%s: matrixB initialization problem.", argv[0]);
 	return 1;
@@ -255,10 +227,7 @@ NUM__THREADS = 1;
   matrixC.height = DimA_M;
   matrixC.width = DimB_N;
   matrixC.rows = mem_c;
-//  if (!initialize_matrix(&matrixC, 0.0f, 0.0f)) {
-//	printf("%s: matrixC initialization problem.", argv[0]);
-//	return 1;
-//  }
+
 
   /* Print matrix */
   printf("---------- Matrix C ----------\n");
@@ -280,8 +249,6 @@ NUM__THREADS = 1;
 	return 1;
   }
 
-  /* Check foor errors */
-  //check_errors(&matrixC, 160.0f);
 
   return 0;
 }

@@ -135,7 +135,7 @@ int scalar_matrix_mult(float scalar_value, struct matrix *matrix) {
 	thread_data_array[t].thread_id = t;
 	thread_data_array[t].buffer_begin = t * buffer_chunk;
 	thread_data_array[t].buffer_end = t * buffer_chunk + buffer_chunk;
-	thread_data_array[t].buffer_sizeA = N;
+	thread_data_array[t].buffer_size = N;
 	thread_data_array[t].stride = VECTOR_SIZE;
 	thread_data_array[t].matrixA = matrix;
 	thread_data_array[t].scalar = scalar_value;
